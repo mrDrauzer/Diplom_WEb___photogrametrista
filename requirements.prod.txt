@@ -1,0 +1,11 @@
+django>=5.0
+yadisk
+psycopg2-binary
+pillow
+django-leaflet
+django-tiles-gl
+gunicorn
+celery
+redis
+python-dotenv
+django-prometheus

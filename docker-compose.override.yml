@@ -1,0 +1,21 @@
+services:
+  django-app:
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+    environment:
+      - DEBUG=True
+    ports:
+      - "8000:8000"
+
+  celery-worker:
+    volumes:
+      - .:/app
+    environment:
+      - DEBUG=True
+
+  nginx:
+    # В режиме разработки можно прокинуть порты напрямую, если не нужен SSL
+    # Но в основном docker-compose.yml порты 80/443 уже есть
+    ports:
+      - "8080:80" 

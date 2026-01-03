@@ -1,0 +1,57 @@
+# Stage 1: Build
+FROM python:3.12-slim as builder
+
+WORKDIR /app
+
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libpq-dev \
+    gcc \
+    gettext \
+    binutils \
+    libproj-dev \
+    gdal-bin \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements.prod.txt .
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir --prefix=/install -r requirements.prod.txt
+
+# Stage 2: Final
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# Install runtime dependencies for PostGIS and GeoDjango
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq5 \
+    binutils \
+    libproj-dev \
+    gdal-bin \
+    netcat-openbsd \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /install /usr/local
+
+COPY . .
+
+# Environment variables
+ENV DEBUG=False
+ENV ALLOWED_HOSTS=*
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+# Create non-root user
+RUN addgroup --system django && adduser --system --group django
+RUN mkdir -p /app/static /app/media /app/mbtiles && \
+    chown -R django:django /app
+
+USER django
+
+# Run collectstatic (will fail if Django app is not yet fully configured, but usually part of build)
+# RUN python manage.py collectstatic --noinput
+
+CMD ["gunicorn", "--workers", "4", "--bind", "0.0.0.0:8000", "photogrametrista.wsgi:application"]

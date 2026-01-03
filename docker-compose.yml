@@ -1,0 +1,200 @@
+services:
+  postgres-postgis:
+    image: postgis/postgis:15-3.4
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      - POSTGRES_DB=${DB_NAME:-diplom_db}
+      - POSTGRES_USER=${DB_USER:-diplom_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-diplom_user} -d ${DB_NAME:-diplom_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - diplom_net
+
+  redis:
+    image: redis:7-alpine
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - diplom_net
+
+  django-app:
+    build:
+      context: .
+      dockerfile: Dockerfile.django
+    command: gunicorn --workers 4 --bind 0.0.0.0:8000 photogrametrista.wsgi:application
+    volumes:
+      - static_volume:/app/static
+      - media_volume:/app/media
+      - mbtiles_volume:/app/mbtiles
+    environment:
+      - DEBUG=False
+      - ALLOWED_HOSTS=*
+      - YADISK_TOKEN=${YADISK_TOKEN}
+      - DATABASE_URL=postgres://${DB_USER:-diplom_user}:${POSTGRES_PASSWORD}@postgres-postgis:5432/${DB_NAME:-diplom_db}
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    depends_on:
+      postgres-postgis:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - diplom_net
+
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.django
+    command: celery -A photogrametrista worker -l info
+    volumes:
+      - media_volume:/app/media
+      - mbtiles_volume:/app/mbtiles
+    environment:
+      - YADISK_TOKEN=${YADISK_TOKEN}
+      - DATABASE_URL=postgres://${DB_USER:-diplom_user}:${POSTGRES_PASSWORD}@postgres-postgis:5432/${DB_NAME:-diplom_db}
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 1G
+    depends_on:
+      postgres-postgis:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - diplom_net
+
+  nginx:
+    image: nginx:latest
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - static_volume:/app/static
+      - media_volume:/app/media
+      - certbot_etc:/etc/letsencrypt
+      - certbot_var:/var/lib/letsencrypt
+      - certbot_www:/var/www/certbot:ro
+    depends_on:
+      - django-app
+    networks:
+      - diplom_net
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot_etc:/etc/letsencrypt
+      - certbot_var:/var/lib/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+    networks:
+      - diplom_net
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${DB_USER:-diplom_user}:${POSTGRES_PASSWORD}@postgres-postgis:5432/${DB_NAME:-diplom_db}?sslmode=disable
+    depends_on:
+      postgres-postgis:
+        condition: service_healthy
+    networks:
+      - diplom_net
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    networks:
+      - diplom_net
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - diplom_net
+
+  loki:
+    image: grafana/loki:latest
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - diplom_net
+
+  promtail:
+    image: grafana/promtail:latest
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./promtail/promtail-config.yml:/etc/promtail/promtail-config.yml
+    command: -config.file=/etc/promtail/promtail-config.yml
+    networks:
+      - diplom_net
+
+networks:
+  diplom_net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  static_volume:
+  media_volume:
+  mbtiles_volume:
+  certbot_etc:
+  certbot_var:
+  certbot_www:
+  prometheus_data:
+  grafana_data:
