@@ -7,5 +7,12 @@ django-tiles-gl
 gunicorn
 celery
 redis
+dj-database-url
 python-dotenv
 django-prometheus
+djangorestframework
+djangorestframework-simplejwt
+django-filter
+django-cors-headers
+exif
+drf-spectacular

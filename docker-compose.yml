@@ -80,7 +80,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.django
-    command: celery -A photogrametrista worker -l info
+    command: celery -A photogrametrista worker -l info --autoscale=4,1 -Q celery
     volumes:
       - media_volume:/app/media
       - mbtiles_volume:/app/mbtiles
@@ -90,6 +90,8 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - SECRET_KEY=${SECRET_KEY}
     deploy:
+      mode: replicated
+      replicas: 2
       resources:
         limits:
           cpus: '1'
@@ -97,6 +99,29 @@ services:
     depends_on:
       postgres-postgis:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - diplom_net
+
+  celery-heavy:
+    build:
+      context: .
+      dockerfile: Dockerfile.django
+    command: celery -A photogrametrista worker -l info -c 2 -Q heavy
+    volumes:
+      - media_volume:/app/media
+      - mbtiles_volume:/app/mbtiles
+    environment:
+      - DATABASE_URL=postgres://${DB_USER:-diplom_user}:${POSTGRES_PASSWORD}@postgres-postgis:5432/${DB_NAME:-diplom_db}
+      - REDIS_URL=redis://redis:6379/0
+      - SECRET_KEY=${SECRET_KEY}
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+    depends_on:
       redis:
         condition: service_healthy
     networks:
@@ -116,6 +141,14 @@ services:
       - certbot_www:/var/www/certbot:ro
     depends_on:
       - django-app
+      - frontend
+    networks:
+      - diplom_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
     networks:
       - diplom_net
 
