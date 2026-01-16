@@ -117,6 +117,11 @@ CELERY_TASK_ROUTES = {
     'core.tasks.export_to_cloud': {'queue': 'celery'},
 }
 
+# WebODM settings
+WEBODM_URL = os.getenv('WEBODM_URL', 'http://webodm:8000')
+WEBODM_USERNAME = os.getenv('WEBODM_USERNAME', 'admin')
+WEBODM_PASSWORD = os.getenv('WEBODM_PASSWORD', 'admin')
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOW_ALL_ORIGINS = True # Для разработки

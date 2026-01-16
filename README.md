@@ -1,4 +1,4 @@
-# Фотограмметрия: Docker Инфраструктура
+# photogrametrista: Docker Инфраструктура
 
 Полноценный Docker-стек для Django проекта с поддержкой PostGIS, Redis, Celery и автоматическим SSL через Let's Encrypt.
 
@@ -30,8 +30,8 @@
 ### 1. Подготовка сервера
 ```bash
 sudo apt update && sudo apt install -y docker.io docker-compose git
-git clone git@github.com:mrDrauzer/Diplom_WEb___photogrametrista.git
-cd Diplom_WEb___photogrametrista
+git clone git@github.com:mrDrauzer/photogrametrista.git
+cd photogrametrista
 ```
 
 ### 2. Настройка переменных
@@ -71,7 +71,7 @@ chmod +x backup.sh
 ```bash
 crontab -e
 # Добавьте строку для ежедневного бэкапа в 3 часа ночи
-0 3 * * * cd /path/to/project && ./backup.sh
+0 3 * * * cd /home/user/photogrametrista && ./backup.sh
 ```
 
 ### Логи

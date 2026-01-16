@@ -20,7 +20,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - diplom_net
+      - photogrametrista_net
 
   redis:
     image: redis:7-alpine
@@ -35,7 +35,7 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - diplom_net
+      - photogrametrista_net
 
   django-app:
     build:
@@ -56,8 +56,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1'
-          memory: 1G
+          cpus: '2'
+          memory: 2G
     logging:
       driver: "json-file"
       options:
@@ -69,12 +69,12 @@ services:
       redis:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health/"]
       interval: 30s
       timeout: 10s
       retries: 3
     networks:
-      - diplom_net
+      - photogrametrista_net
 
   celery-worker:
     build:
@@ -94,15 +94,15 @@ services:
       replicas: 2
       resources:
         limits:
-          cpus: '1'
-          memory: 1G
+          cpus: '2'
+          memory: 2G
     depends_on:
       postgres-postgis:
         condition: service_healthy
       redis:
         condition: service_healthy
     networks:
-      - diplom_net
+      - photogrametrista_net
 
   celery-heavy:
     build:
@@ -119,13 +119,13 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2'
-          memory: 4G
+          cpus: '8'
+          memory: 32G
     depends_on:
       redis:
         condition: service_healthy
     networks:
-      - diplom_net
+      - photogrametrista_net
 
   nginx:
     image: nginx:latest
@@ -143,14 +143,19 @@ services:
       - django-app
       - frontend
     networks:
-      - diplom_net
+      - photogrametrista_net
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile.frontend
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
-      - diplom_net
+      - photogrametrista_net
 
   certbot:
     image: certbot/certbot
@@ -160,7 +165,7 @@ services:
       - certbot_www:/var/www/certbot
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
     networks:
-      - diplom_net
+      - photogrametrista_net
 
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter
@@ -170,7 +175,7 @@ services:
       postgres-postgis:
         condition: service_healthy
     networks:
-      - diplom_net
+      - photogrametrista_net
 
   prometheus:
     image: prom/prometheus:latest
@@ -183,7 +188,7 @@ services:
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
       - '--web.console.templates=/usr/share/prometheus/consoles'
     networks:
-      - diplom_net
+      - photogrametrista_net
 
   grafana:
     image: grafana/grafana:latest
@@ -197,7 +202,7 @@ services:
       - prometheus
       - loki
     networks:
-      - diplom_net
+      - photogrametrista_net
 
   loki:
     image: grafana/loki:latest
@@ -205,7 +210,7 @@ services:
       - "3100:3100"
     command: -config.file=/etc/loki/local-config.yaml
     networks:
-      - diplom_net
+      - photogrametrista_net
 
   promtail:
     image: grafana/promtail:latest
@@ -215,10 +220,37 @@ services:
       - ./promtail/promtail-config.yml:/etc/promtail/promtail-config.yml
     command: -config.file=/etc/promtail/promtail-config.yml
     networks:
-      - diplom_net
+      - photogrametrista_net
+
+  nodeodm:
+    image: opendronemap/nodeodm
+    container_name: nodeodm
+    deploy:
+      resources:
+        limits:
+          cpus: '4'
+          memory: 16G
+    networks:
+      - photogrametrista_net
+
+  webodm:
+    image: opendronemap/webodm
+    container_name: webodm
+    environment:
+      - WO_PORT=8000
+      - WO_HOST=webodm
+    ports:
+      - "8002:8000"
+    volumes:
+      - webodm_db:/var/lib/postgresql/data
+      - webodm_app:/var/www/webodm/app/media
+    depends_on:
+      - nodeodm
+    networks:
+      - photogrametrista_net
 
 networks:
-  diplom_net:
+  photogrametrista_net:
     driver: bridge
 
 volumes:
@@ -231,3 +263,5 @@ volumes:
   certbot_www:
   prometheus_data:
   grafana_data:
+  webodm_db:
+  webodm_app:

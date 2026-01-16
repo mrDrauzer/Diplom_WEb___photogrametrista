@@ -6,7 +6,7 @@ services:
     environment:
       - DEBUG=True
     ports:
-      - "8000:8000"
+      - "8001:8000"
 
   celery-worker:
     volumes:
@@ -18,4 +18,12 @@ services:
     # В режиме разработки можно прокинуть порты напрямую, если не нужен SSL
     # Но в основном docker-compose.yml порты 80/443 уже есть
     ports:
-      - "8080:80" 
+      - "8080:80"
+
+  grafana:
+    ports:
+      - "3001:3000"
+
+  loki:
+    ports:
+      - "3101:3100"

@@ -16,3 +16,8 @@ django-filter
 django-cors-headers
 exif
 drf-spectacular
+requests
+djangorestframework-gis
+opencv-python-headless
+numpy
+tqdm

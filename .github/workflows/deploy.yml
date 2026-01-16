@@ -18,6 +18,6 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd ~/Diplom_WEb___photogrametrista
+            cd ~/photogrametrista
             git pull origin main
             ./deploy.sh
